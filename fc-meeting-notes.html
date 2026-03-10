@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>FC Meeting Notes</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --dark: #0a0a0a;
+    --surface: #141414;
+    --surface2: #1a1a1a;
+    --border: #272727;
+    --border2: #333;
+    --gold: #c9a96e;
+    --text: #ede8df;
+    --muted: #6b6560;
+    --subtext: #c8c0b4;
+    --error: #d97070;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--dark); color: var(--text); font-family: 'DM Sans', sans-serif; }
+
+  /* LAYOUT */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 260px; min-width: 260px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; transition: transform 0.3s; }
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* SIDEBAR */
+  .sb-header { padding: 20px 16px 14px; border-bottom: 1px solid var(--border); }
+  .sb-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .sb-mono { width: 34px; height: 34px; border: 1px solid var(--gold); display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
+  .sb-title { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .sb-search { position: relative; }
+  .sb-search input { width: 100%; background: var(--dark); border: 1px solid var(--border); color: var(--text); border-radius: 2px; padding: 9px 12px 9px 32px; font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; }
+  .sb-search input::placeholder { color: #333; }
+  .sb-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+
+  .sb-section { padding: 14px 16px 8px; }
+  .sb-section-label { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .nb-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+  .nb-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 2px; cursor: pointer; font-size: 13px; color: var(--subtext); transition: background 0.15s; margin-bottom: 2px; }
+  .nb-item:hover { background: var(--surface2); }
+  .nb-item.active { background: var(--surface2); color: var(--text); }
+  .nb-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .nb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nb-count { font-size: 10px; color: var(--muted); }
+  .nb-add { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 2px; cursor: pointer; font-size: 12px; color: var(--muted); transition: color 0.15s; margin: 0 0 4px; }
+  .nb-add:hover { color: var(--gold); }
+
+  .sb-nav { border-top: 1px solid var(--border); padding: 8px; }
+  .sb-nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 10px; border-radius: 2px; cursor: pointer; font-size: 12px; color: var(--muted); background: none; border: none; font-family: 'DM Sans', sans-serif; transition: color 0.15s; letter-spacing: 0.04em; }
+  .sb-nav-btn:hover { color: var(--text); }
+  .sb-nav-btn.active { color: var(--gold); }
+
+  /* MAIN HEADER */
+  .top-bar { padding: 18px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .top-bar-left { display: flex; align-items: center; gap: 14px; }
+  .hamburger { display: none; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px; }
+  .top-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 600; }
+  .top-sub { font-size: 12px; color: var(--muted); margin-top: 2px; letter-spacing: 0.02em; }
+  .sync-status { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .sync-dot.ok { background: #6dbb8a; }
+  .sync-dot.syncing { background: var(--gold); animation: pulse 1s infinite; }
+  .sync-dot.error { background: var(--error); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* CONTENT */
+  .content { padding: 28px; flex: 1; }
+
+  /* TABS */
+  .tab-bar { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 1px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-btn { padding: 10px 16px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; background: none; border: none; color: var(--muted); font-family: 'DM Sans', sans-serif; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: color 0.15s; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 2px; padding: 22px; margin-bottom: 16px; }
+  .field { margin-bottom: 18px; }
+  .lbl { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 8px; }
+  .inp { background: var(--dark); border: 1px solid var(--border); color: var(--text); border-radius: 2px; padding: 11px 14px; width: 100%; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
+  .inp::placeholder { color: #333; }
+  .inp:focus { border-color: #3a3a3a; }
+  .ta { background: var(--dark); border: 1px solid var(--border); color: var(--text); border-radius: 2px; padding: 11px 14px; width: 100%; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; resize: vertical; }
+  .ta::placeholder { color: #333; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+  .err-msg { color: var(--error); font-size: 12px; margin-top: 10px; }
+
+  /* BUTTONS */
+  .btn-primary { border: none; padding: 14px 24px; font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; border-radius: 2px; cursor: pointer; width: 100%; letter-spacing: 0.04em; transition: opacity 0.15s; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 8px 18px; font-family: 'DM Sans', sans-serif; font-size: 12px; border-radius: 2px; cursor: pointer; letter-spacing: 0.04em; transition: color 0.15s; }
+  .btn-outline:hover { color: var(--text); }
+  .btn-ghost { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 6px 10px; border-radius: 2px; font-family: 'DM Sans', sans-serif; transition: color 0.15s; }
+  .btn-ghost:hover { color: var(--text); }
+
+  /* BANNER */
+  .banner { border-left-width: 3px; border-left-style: solid; border-radius: 2px; padding: 14px 16px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; }
+  .banner-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .banner-txt { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  /* OUTPUT */
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+  .out-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+  .out-title { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 600; }
+  .out-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .sec { border-radius: 2px; padding: 20px 22px; margin-bottom: 14px; }
+  .sec-lbl { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 14px; font-weight: 500; }
+  .sum-txt { font-size: 15px; line-height: 1.75; color: var(--subtext); }
+  .dec-row { display: flex; gap: 12px; margin-bottom: 10px; font-size: 14px; color: var(--subtext); line-height: 1.5; }
+  .a-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+  .a-task { font-size: 14px; color: var(--subtext); line-height: 1.5; }
+  .s-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 14px; }
+  .s-txt { font-size: 14px; color: var(--subtext); display: flex; gap: 10px; line-height: 1.5; }
+  .dl { font-size: 11px; white-space: nowrap; margin-top: 2px; letter-spacing: 0.04em; }
+  .pill { font-size: 11px; padding: 4px 10px; border-radius: 2px; letter-spacing: 0.04em; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+  .o-tag { font-size: 11px; padding: 3px 9px; border-radius: 2px; white-space: nowrap; flex-shrink: 0; margin-top: 1px; font-weight: 500; letter-spacing: 0.02em; }
+
+  /* SPINNER */
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #2a2a2a; border-top-color: var(--dark); border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* NOTES LIST */
+  .notes-list { display: flex; flex-direction: column; gap: 12px; }
+  .note-card { background: var(--surface); border: 1px solid var(--border); border-radius: 2px; padding: 18px 20px; cursor: pointer; transition: border-color 0.15s; }
+  .note-card:hover { border-color: var(--border2); }
+  .note-card-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .note-card-title { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 600; }
+  .note-card-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  .note-card-preview { font-size: 13px; color: var(--muted); line-height: 1.5; margin-top: 8px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .tag { font-size: 10px; padding: 3px 8px; border-radius: 2px; letter-spacing: 0.04em; }
+  .date-txt { font-size: 11px; color: var(--muted); }
+
+  /* NOTE DETAIL */
+  .note-detail { max-width: 760px; }
+  .note-detail-hdr { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .back-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px 8px 4px 0; }
+  .back-btn:hover { color: var(--text); }
+
+  /* MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 2px; padding: 28px; width: 100%; max-width: 400px; }
+  .modal-title { font-family: 'Playfair Display', serif; font-size: 20px; margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+
+  /* GOOGLE AUTH */
+  .auth-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 20px; padding: 20px; text-align: center; }
+  .auth-logo { width: 60px; height: 60px; border: 1px solid var(--gold); display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; color: var(--gold); margin: 0 auto 8px; }
+  .auth-title { font-family: 'Playfair Display', serif; font-size: 28px; }
+  .auth-sub { font-size: 14px; color: var(--muted); max-width: 340px; line-height: 1.6; }
+  .auth-btn { background: var(--gold); color: var(--dark); border: none; padding: 14px 32px; font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; border-radius: 2px; cursor: pointer; letter-spacing: 0.04em; }
+
+  /* EMPTY STATE */
+  .empty { text-align: center; padding: 60px 20px; }
+  .empty-icon { font-size: 36px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-title { font-family: 'Playfair Display', serif; font-size: 20px; margin-bottom: 8px; color: var(--subtext); }
+  .empty-sub { font-size: 13px; color: var(--muted); }
+
+  /* MOBILE */
+  .mobile-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; }
+  @media (max-width: 768px) {
+    .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 50; transform: translateX(-100%); width: 280px; min-width: 280px; }
+    .sidebar.open { transform: translateX(0); }
+    .mobile-overlay.show { display: block; }
+    .hamburger { display: block; }
+    .content { padding: 16px; }
+    .top-bar { padding: 14px 16px; }
+    .row2 { grid-template-columns: 1fr; }
+    .sync-label { display: none; }
+  }
+
+  /* NOTEBOOK COLORS */
+  .c-general    { --acc: #c9a96e; --acc-dk: #1a1408; --acc-bd: #3a2e10; --acc-tag: #a89060; }
+  .c-technical  { --acc: #7ab3d4; --acc-dk: #08111a; --acc-bd: #1a3045; --acc-tag: #5a93b4; }
+  .c-project    { --acc: #8dba7a; --acc-dk: #0a130a; --acc-bd: #1e3018; --acc-tag: #6da05a; }
+  .c-commercial { --acc: #b07ad4; --acc-dk: #120a1a; --acc-bd: #2e1845; --acc-tag: #9060b4; }
+  .c-hse        { --acc: #d47a7a; --acc-dk: #1a0a0a; --acc-bd: #3a1818; --acc-tag: #b46060; }
+  .c-contractor { --acc: #7ac4d4; --acc-dk: #081418; --acc-bd: #183040; --acc-tag: #5aa4b4; }
+  .c-asset      { --acc: #d4b87a; --acc-dk: #1a1408; --acc-bd: #3a2e10; --acc-tag: #b49860; }
+  .c-custom1    { --acc: #a87ab0; --acc-dk: #110a14; --acc-bd: #2e1835; --acc-tag: #8860a0; }
+  .c-custom2    { --acc: #7ab07a; --acc-dk: #0a140a; --acc-bd: #183518; --acc-tag: #60a060; }
+  .c-custom3    { --acc: #b0a07a; --acc-dk: #141008; --acc-bd: #352e18; --acc-tag: #a09060; }
+</style>
+</head>
+<body>
+
+<div id="auth-screen" class="auth-screen" style="display:none">
+  <div class="auth-logo">FC</div>
+  <div class="auth-title">Meeting Notes</div>
+  <p class="auth-sub">Sign in with Google to sync your notes across all devices.</p>
+  <button class="auth-btn" onclick="signIn()">Sign in with Google</button>
+  <p style="font-size:11px;color:var(--muted);margin-top:8px">Francis Clark · Technical Services</p>
+</div>
+
+<div id="app" class="app" style="display:none">
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sb-header">
+      <div class="sb-brand">
+        <div class="sb-mono">FC</div>
+        <div>
+          <div style="font-size:13px;color:var(--text)">Meeting Notes</div>
+          <div class="sb-title">Technical Services</div>
+        </div>
+      </div>
+      <div class="sb-search">
+        <span class="sb-search-icon">⌕</span>
+        <input type="text" placeholder="Search notes..." id="search-input" oninput="handleSearch(this.value)">
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-section-label">Notebooks</div>
+    </div>
+    <div class="nb-list" id="nb-list"></div>
+
+    <div class="sb-nav">
+      <button class="sb-nav-btn active" id="nav-generate" onclick="setView('generate')">
+        <span>✦</span> Generate Notes
+      </button>
+      <button class="sb-nav-btn" id="nav-history" onclick="setView('history')">
+        <span>◈</span> All Notes
+      </button>
+      <button class="sb-nav-btn" onclick="signOut()" style="margin-top:4px">
+        <span>⇠</span> Sign Out
+      </button>
+    </div>
+  </div>
+
+  <div class="mobile-overlay" id="mobile-overlay" onclick="closeSidebar()"></div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <button class="hamburger" onclick="toggleSidebar()">☰</button>
+        <div>
+          <div class="top-title" id="top-title">Generate Notes</div>
+          <div class="top-sub" id="top-sub"></div>
+        </div>
+      </div>
+      <div class="sync-status">
+        <div class="sync-dot" id="sync-dot"></div>
+        <span class="sync-label" id="sync-label">Not signed in</span>
+      </div>
+    </div>
+
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<!-- ADD NOTEBOOK MODAL -->
+<div class="modal-overlay" id="nb-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-title">New Notebook</div>
+    <div class="field">
+      <label class="lbl">Name</label>
+      <input class="inp" id="nb-name-input" placeholder="e.g. Hotel Alpha, Q2 Projects" maxlength="40">
+    </div>
+    <div class="field">
+      <label class="lbl">Colour</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap" id="nb-color-picker"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeNbModal()">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:10px 24px;background:var(--gold);color:var(--dark)" onclick="addNotebook()">Create</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const CLIENT_ID = '955523222840-fo3idq5op2gsok4p3fel8eupis4du91b.apps.googleusercontent.com';
+const API_KEY = 'AIzaSyD0qSfMnFHCmZfnsawllqGvIDrlzcGkuLU';
+const ANTHROPIC_KEY_STORAGE = 'fc_anthropic_key';
+const DRIVE_FILE_NAME = 'fc-meeting-notes-data.json';
+const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+
+const FC_CONTEXT = `Francis Clark is Head of Technical Services with 30+ years across FM, engineering, and luxury hospitality globally.
+- Leads all technical strategy, infrastructure, and FM operations
+- Deep expertise: HVAC, BMS, CAFM, EAMS, IoT, electrical systems, MEP, fire protection
+- ISO standards: 9001, 14001, 45001, 41001, 55001
+- Background: Sandals Resorts, Engie Solutions ME, Sodexo, Ventia, Red Bull Racing F1
+- Stakeholders: senior leadership, hotel operators, FM Managing Partners, Service Partners, contractors
+- Fluent in: SLAs, KPIs, SOPs, RFPs, PPM/CM, Capex planning, P&L, asset lifecycle
+- World-class environment: precision, safety, and guest experience are paramount
+Write notes using luxury hospitality FM and technical services terminology. Professional, precise, executive-level tone.`;
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let state = {
+  view: 'generate',        // 'generate' | 'history' | 'note-detail' | 'notebook'
+  tab: 'general',
+  notebooks: [],
+  notes: [],
+  activeNotebook: null,    // id or null = all
+  viewingNote: null,
+  searchQuery: '',
+  loading: false,
+  error: '',
+  result: null,
+  lastData: {},
+  copied: false,
+  syncing: false,
+  driveFileId: null,
+  accessToken: null,
+  anthropicKey: localStorage.getItem(ANTHROPIC_KEY_STORAGE) || '',
+};
+
+const DEFAULT_NOTEBOOKS = [
+  { id: 'general',    name: 'General',     color: 'c-general',    preset: true },
+  { id: 'technical',  name: 'Technical',   color: 'c-technical',  preset: true },
+  { id: 'project',    name: 'Project',     color: 'c-project',    preset: true },
+  { id: 'commercial', name: 'Commercial',  color: 'c-commercial', preset: true },
+  { id: 'hse',        name: 'HSE',         color: 'c-hse',        preset: true },
+  { id: 'contractor', name: 'Contractor',  color: 'c-contractor', preset: true },
+  { id: 'asset',      name: 'Asset & PPM', color: 'c-asset',      preset: true },
+];
+
+const COLOR_OPTIONS = [
+  { id: 'c-custom1', hex: '#a87ab0', label: 'Mauve' },
+  { id: 'c-custom2', hex: '#7ab07a', label: 'Sage' },
+  { id: 'c-custom3', hex: '#b0a07a', label: 'Sand' },
+  { id: 'c-general', hex: '#c9a96e', label: 'Gold' },
+  { id: 'c-technical', hex: '#7ab3d4', label: 'Blue' },
+  { id: 'c-hse', hex: '#d47a7a', label: 'Red' },
+];
+
+const ACCENT = {
+  'c-general':    { main: '#c9a96e', dk: '#1a1408', bd: '#3a2e10', tag: '#a89060' },
+  'c-technical':  { main: '#7ab3d4', dk: '#08111a', bd: '#1a3045', tag: '#5a93b4' },
+  'c-project':    { main: '#8dba7a', dk: '#0a130a', bd: '#1e3018', tag: '#6da05a' },
+  'c-commercial': { main: '#b07ad4', dk: '#120a1a', bd: '#2e1845', tag: '#9060b4' },
+  'c-hse':        { main: '#d47a7a', dk: '#1a0a0a', bd: '#3a1818', tag: '#b46060' },
+  'c-contractor': { main: '#7ac4d4', dk: '#081418', bd: '#183040', tag: '#5aa4b4' },
+  'c-asset':      { main: '#d4b87a', dk: '#1a1408', bd: '#3a2e10', tag: '#b49860' },
+  'c-custom1':    { main: '#a87ab0', dk: '#110a14', bd: '#2e1835', tag: '#8860a0' },
+  'c-custom2':    { main: '#7ab07a', dk: '#0a140a', bd: '#183518', tag: '#60a060' },
+  'c-custom3':    { main: '#b0a07a', dk: '#141008', bd: '#352e18', tag: '#a09060' },
+};
+
+const TAB_IDS = ['general','technical','project','commercial','hse','contractor','asset'];
+
+const TAB_CFG = {
+  general:    { label: 'General',    banner: 'AI pre-briefed on FM terminology, ISO standards, technical services, stakeholder landscape.', ph: '- reviewed BMS report with service partner\n- HVAC fault on Block C resolved\n- KPI review: 94% compliance, target 97%\n- next review in 2 weeks', btn: 'Generate Meeting Notes →' },
+  technical:  { label: 'Technical',  banner: 'HVAC, BMS, MEP, electrical, fire, IoT, CAFM, commissioning, defect management, technical compliance.', btn: 'Generate Technical Notes →' },
+  project:    { label: 'Project',    banner: 'Project context loaded: programme tracking, milestones, risk register, RFIs, Capex, stakeholder alignment.', e1: { lbl: 'Project / Package Name', ph: 'e.g. Hotel MEP Package 3' }, e2: { lbl: 'Phase', ph: 'e.g. Commissioning' }, ph: '- programme review: 3 weeks behind on MEP rough-in\n- RFI #42 issued to design team\n- risk: crane availability Q2', btn: 'Generate Project Notes →' },
+  commercial: { label: 'Commercial', banner: 'Contract management, variations, valuations, SLAs, P&L, procurement, disputes.', e1: { lbl: 'Contract Reference', ph: 'e.g. Contract 2024-FM-017' }, e2: { lbl: 'Commercial Stage', ph: 'e.g. Variation Negotiation' }, ph: '- variation VO-023 agreed in principle\n- subcontractor invoice dispute outstanding\n- budget forecast: 4% overspend flagged', btn: 'Generate Commercial Notes →' },
+  hse:        { label: 'HSE',        banner: 'ISO 45001, incident management, PTW, risk assessments, audit findings, regulatory compliance.', e1: { lbl: 'HSE Topic / Incident Ref', ph: 'e.g. Monthly HSE Review' }, e2: { lbl: 'Location / Zone', ph: 'e.g. Plant Room B' }, ph: '- LTI-free: 187 days\n- near miss: unsecured access panel\n- PTW audit: 3 non-conformances raised', btn: 'Generate HSE Notes →' },
+  contractor: { label: 'Contractor', banner: 'SLA KPIs, CAFM compliance, PPM delivery, service failures, improvement plans.', e1: { lbl: 'Contractor / Vendor', ph: 'e.g. Engie Solutions' }, e2: { lbl: 'Contract / Service Line', ph: 'e.g. HVAC Maintenance' }, ph: '- SLA compliance: 91%, target 95%\n- 4 reactive jobs overdue\n- CAFM data quality issues raised', btn: 'Generate Contractor Notes →' },
+  asset:      { label: 'Asset & PPM', banner: 'ISO 55001, lifecycle planning, EAMS, PPM compliance, Capex forecasting, criticality.', e1: { lbl: 'Asset System / Category', ph: 'e.g. HVAC Plant, Electrical LV' }, e2: { lbl: 'EAMS / CAFM Reference', ph: 'e.g. MAXIMO, Archibus' }, ph: '- PPM compliance: 88%, backlog 14 tasks\n- chiller #1 end-of-life, Capex Q3\n- asset register audit: 3 gaps', btn: 'Generate Asset Notes →' },
+};
+
+const SYS_PROMPTS = {
+  general:    (c) => `${c}\nMeeting type: GENERAL FM. Respond ONLY with valid JSON, no markdown:\n{"summary":"2-4 sentence executive narrative","decisions":["..."],"actions":[{"owner":"...","task":"..."}],"next_steps":[{"item":"...","deadline":"...or null"}]}`,
+  technical:  (c) => `${c}\nMeeting type: TECHNICAL. Cover systems, defects, safety, escalations. Respond ONLY with valid JSON:\n{"summary":"...","systems_health":[{"system":"...","status":"NORMAL|DEGRADED|FAULT|OFFLINE","note":"..."}],"open_defects":[{"ref":"DEF-XXX","description":"...","priority":"P1|P2|P3","status":"Open|In Progress|Pending Parts"}],"safety_observations":["..."],"escalations":[{"item":"...","owner":"...","urgency":"Immediate|24hr|Routine"}],"decisions":["..."],"actions":[{"owner":"...","task":"..."}],"next_steps":[{"item":"...","deadline":"...or null"}]}`,
+  project:    (c) => `${c}\nMeeting type: PROJECT. Cover programme, milestones, risks, RFIs, Capex. Respond ONLY with valid JSON:\n{"summary":"...","decisions":["..."],"risks":["..."],"actions":[{"owner":"...","task":"..."}],"next_steps":[{"item":"...","deadline":"...or null"}]}`,
+  commercial: (c) => `${c}\nMeeting type: COMMERCIAL. Cover valuations, variations, SLA, P&L. Respond ONLY with valid JSON:\n{"summary":"...","decisions":["..."],"risks":["..."],"actions":[{"owner":"...","task":"..."}],"next_steps":[{"item":"...","deadline":"...or null"}]}`,
+  hse:        (c) => `${c}\nMeeting type: HSE. Reference ISO 45001, incidents, PTW, audits. Respond ONLY with valid JSON:\n{"summary":"...","decisions":["..."],"findings":["..."],"actions":[{"owner":"...","task":"..."}],"next_steps":[{"item":"...","deadline":"...or null"}]}`,
+  contractor: (c) => `${c}\nMeeting type: CONTRACTOR PERFORMANCE. Cover SLA KPIs, CAFM, PPM. Respond ONLY with valid JSON:\n{"summary":"...","decisions":["..."],"risks":["..."],"actions":[{"owner":"...","task":"..."}],"next_steps":[{"item":"...","deadline":"...or null"}]}`,
+  asset:      (c) => `${c}\nMeeting type: ASSET MANAGEMENT. Reference ISO 55001, EAMS, lifecycle, Capex. Respond ONLY with valid JSON:\n{"summary":"...","decisions":["..."],"risks":["..."],"actions":[{"owner":"...","task":"..."}],"next_steps":[{"item":"...","deadline":"...or null"}]}`,
+};
+
+// ─── GOOGLE AUTH ──────────────────────────────────────────────────────────────
+let tokenClient;
+
+function initGoogleAuth() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: async (resp) => {
+      if (resp.error) { console.error(resp); return; }
+      state.accessToken = resp.access_token;
+      setSyncStatus('syncing', 'Syncing...');
+      await loadFromDrive();
+      showApp();
+    },
+  });
+}
+
+function signIn() {
+  if (!window.google) { alert('Google auth not loaded. Check your internet connection.'); return; }
+  initGoogleAuth();
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+}
+
+function signOut() {
+  if (state.accessToken) google.accounts.oauth2.revoke(state.accessToken);
+  state.accessToken = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  renderAll();
+}
+
+window.addEventListener('load', () => {
+  // Try silent sign-in via stored hint
+  if (window.google) {
+    initGoogleAuth();
+    // Show auth screen; user must click
+  }
+  document.getElementById('auth-screen').style.display = 'flex';
+});
+
+// ─── GOOGLE DRIVE ─────────────────────────────────────────────────────────────
+async function driveReq(method, path, body) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/${path}`, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${state.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json();
+}
+
+async function findDriveFile() {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_FILE_NAME}'&fields=files(id,name)`, {
+    headers: { 'Authorization': `Bearer ${state.accessToken}` },
+  });
+  const data = await res.json();
+  return data.files && data.files.length > 0 ? data.files[0].id : null;
+}
+
+async function loadFromDrive() {
+  try {
+    setSyncStatus('syncing', 'Loading...');
+    const fileId = await findDriveFile();
+    if (fileId) {
+      state.driveFileId = fileId;
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { 'Authorization': `Bearer ${state.accessToken}` },
+      });
+      const data = await res.json();
+      state.notebooks = data.notebooks || DEFAULT_NOTEBOOKS;
+      state.notes = data.notes || [];
+    } else {
+      state.notebooks = DEFAULT_NOTEBOOKS;
+      state.notes = [];
+      await saveToDrive();
+    }
+    setSyncStatus('ok', 'Synced');
+  } catch(e) {
+    setSyncStatus('error', 'Sync error');
+    console.error(e);
+    state.notebooks = DEFAULT_NOTEBOOKS;
+  }
+}
+
+async function saveToDrive() {
+  if (!state.accessToken) return;
+  setSyncStatus('syncing', 'Saving...');
+  try {
+    const payload = JSON.stringify({ notebooks: state.notebooks, notes: state.notes });
+    if (state.driveFileId) {
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${state.driveFileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${state.accessToken}`, 'Content-Type': 'application/json' },
+        body: payload,
+      });
+    } else {
+      const meta = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${state.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: DRIVE_FILE_NAME, parents: ['appDataFolder'] }),
+      });
+      const metaData = await meta.json();
+      state.driveFileId = metaData.id;
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${state.driveFileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${state.accessToken}`, 'Content-Type': 'application/json' },
+        body: payload,
+      });
+    }
+    setSyncStatus('ok', 'Synced');
+  } catch(e) {
+    setSyncStatus('error', 'Sync error');
+    console.error(e);
+  }
+}
+
+function setSyncStatus(status, label) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  if (dot) { dot.className = `sync-dot ${status}`; }
+  if (lbl) lbl.textContent = label;
+}
+
+// ─── NAVIGATION ──────────────────────────────────────────────────────────────
+function setView(v, extra) {
+  state.view = v;
+  state.viewingNote = extra || null;
+  closeSidebar();
+  renderAll();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('mobile-overlay').classList.toggle('show');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mobile-overlay').classList.remove('show');
+}
+
+function handleSearch(q) {
+  state.searchQuery = q;
+  if (q && state.view !== 'history') setView('history');
+  else renderContent();
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderSidebar();
+  renderContent();
+}
+
+function renderSidebar() {
+  // Nav buttons
+  document.getElementById('nav-generate').className = 'sb-nav-btn' + (state.view === 'generate' ? ' active' : '');
+  document.getElementById('nav-history').className = 'sb-nav-btn' + (['history','note-detail'].includes(state.view) ? ' active' : '');
+
+  // Notebooks
+  const list = document.getElementById('nb-list');
+  let html = '';
+  // All notes item
+  const allCount = state.notes.length;
+  html += `<div class="nb-item${!state.activeNotebook && state.view === 'history' ? ' active' : ''}" onclick="selectNotebook(null)">
+    <div class="nb-dot" style="background:#444"></div>
+    <span class="nb-name">All Notes</span>
+    <span class="nb-count">${allCount}</span>
+  </div>`;
+  state.notebooks.forEach(nb => {
+    const acc = ACCENT[nb.color] || ACCENT['c-general'];
+    const count = state.notes.filter(n => n.notebookId === nb.id).length;
+    html += `<div class="nb-item${state.activeNotebook === nb.id && state.view === 'history' ? ' active' : ''}" onclick="selectNotebook('${nb.id}')">
+      <div class="nb-dot" style="background:${acc.main}"></div>
+      <span class="nb-name">${nb.name}</span>
+      <span class="nb-count">${count}</span>
+    </div>`;
+  });
+  html += `<div class="nb-add" onclick="openNbModal()"><span style="font-size:16px">+</span> New Notebook</div>`;
+  list.innerHTML = html;
+}
+
+function selectNotebook(id) {
+  state.activeNotebook = id;
+  setView('history');
+}
+
+function renderContent() {
+  const content = document.getElementById('content');
+  const topTitle = document.getElementById('top-title');
+  const topSub = document.getElementById('top-sub');
+
+  if (state.view === 'generate') {
+    topTitle.textContent = 'Generate Notes';
+    topSub.textContent = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+    content.innerHTML = renderGenerateView();
+    attachGenerateEvents();
+  } else if (state.view === 'history') {
+    const nb = state.activeNotebook ? state.notebooks.find(n => n.id === state.activeNotebook) : null;
+    topTitle.textContent = nb ? nb.name : (state.searchQuery ? 'Search Results' : 'All Notes');
+    topSub.textContent = '';
+    content.innerHTML = renderHistoryView();
+  } else if (state.view === 'note-detail') {
+    const note = state.notes.find(n => n.id === state.viewingNote);
+    topTitle.textContent = note ? note.title || 'Meeting Notes' : 'Note';
+    topSub.textContent = note ? formatDate(note.createdAt) : '';
+    content.innerHTML = renderNoteDetail(note);
+  }
+}
+
+// ─── GENERATE VIEW ────────────────────────────────────────────────────────────
+function renderGenerateView() {
+  const tab = state.tab;
+  const cfg = TAB_CFG[tab];
+  const nbColor = getNbColor(tab);
+  const acc = ACCENT[nbColor];
+
+  let tabBar = `<div class="tab-bar">`;
+  TAB_IDS.forEach(id => {
+    const a = ACCENT[getNbColor(id)];
+    const active = id === tab;
+    tabBar += `<button class="tab-btn" onclick="setTab('${id}')" style="${active ? `color:${a.main};border-bottom-color:${a.main}` : ''}">${TAB_CFG[id].label}</button>`;
+  });
+  tabBar += `</div>`;
+
+  let form = '';
+  if (tab === 'technical') {
+    form = renderTechnicalForm(acc);
+  } else {
+    form = renderStandardForm(tab, cfg, acc);
+  }
+
+  let output = '';
+  if (state.result && state.lastData.tab === tab) {
+    output = renderOutput(state.result, tab, acc, state.lastData);
+  }
+
+  return tabBar + form + output;
+}
+
+function renderStandardForm(tab, cfg, acc) {
+  const d = state.lastData.tab === tab ? state.lastData : {};
+  let extraFields = '';
+  if (cfg.e1) {
+    extraFields = `<div class="row2">
+      <div><label class="lbl">${cfg.e1.lbl}</label><input class="inp" id="f-e1" placeholder="${cfg.e1.ph}" value="${d.e1 || ''}"></div>
+      <div><label class="lbl">${cfg.e2.lbl}</label><input class="inp" id="f-e2" placeholder="${cfg.e2.ph}" value="${d.e2 || ''}"></div>
+    </div>`;
+  }
+  return `
+    <div class="banner ${tab}" style="background:${acc.dk};border-color:${acc.bd};border-left-color:${acc.main}">
+      <div class="banner-dot" style="background:${acc.main}"></div>
+      <div class="banner-txt"><strong style="color:${acc.tag}">Context loaded. </strong>${cfg.banner}</div>
+    </div>
+    <div class="card">
+      <div class="field"><label class="lbl">Meeting Title</label><input class="inp" id="f-title" placeholder="e.g. Weekly FM Review" value="${d.title || ''}"></div>
+      <div class="field"><label class="lbl">Attendees (optional)</label><input class="inp" id="f-attendees" placeholder="e.g. FM Managing Partner, Hotel Ops Director" value="${d.attendees || ''}"></div>
+      <div class="field"><label class="lbl">Save to Notebook</label>${renderNotebookSelect(tab)}</div>
+      ${extraFields}
+      <div class="field"><label class="lbl">Your Bullet Points</label><textarea class="ta" id="f-bullets" rows="8" placeholder="${cfg.ph}">${d.bullets || ''}</textarea></div>
+      ${state.error ? `<div class="err-msg">${state.error}</div>` : ''}
+      <div style="margin-top:18px">
+        <button class="btn-primary" id="gen-btn" style="background:${acc.main};color:#0a0a0a" onclick="generate()" ${state.loading ? 'disabled' : ''}>
+          ${state.loading ? '<span class="spin"></span>Generating...' : cfg.btn}
+        </button>
+      </div>
+    </div>`;
+}
+
+function renderTechnicalForm(acc) {
+  const d = state.lastData.tab === 'technical' ? state.lastData : {};
+  return `
+    <div class="banner" style="background:${acc.dk};border-color:${acc.bd};border-left-color:${acc.main}">
+      <div class="banner-dot" style="background:${acc.main}"></div>
+      <div class="banner-txt"><strong style="color:${acc.tag}">Technical context loaded. </strong>${TAB_CFG.technical.banner}</div>
+    </div>
+    <div class="card">
+      <div class="field"><label class="lbl">Meeting Title</label><input class="inp" id="f-title" placeholder="e.g. BMS Commissioning Review" value="${d.title || ''}"></div>
+      <div class="field"><label class="lbl">Attendees (optional)</label><input class="inp" id="f-attendees" placeholder="e.g. BMS Engineer, MEP Contractor" value="${d.attendees || ''}"></div>
+      <div class="field"><label class="lbl">Save to Notebook</label>${renderNotebookSelect('technical')}</div>
+      <div class="field"><label class="lbl">Systems Status / Technical Updates</label><textarea class="ta" id="f-sys" rows="4" placeholder="HVAC Zone A: normal\nBMS: 2 alarms under investigation\nFire panel: zone 4 drift noted">${d.sys || ''}</textarea></div>
+      <div class="field"><label class="lbl">Open Defects / Active Faults</label><textarea class="ta" id="f-def" rows="4" placeholder="- AHU-03 Block C: compressor fault, P2\n- Emergency light Zone 4: lamp failure, P3">${d.def || ''}</textarea></div>
+      <div class="row2">
+        <div><label class="lbl">Safety / Compliance</label><textarea class="ta" id="f-saf" rows="3" placeholder="- PTW #034 active\n- Safe isolation confirmed">${d.saf || ''}</textarea></div>
+        <div><label class="lbl">Escalations</label><textarea class="ta" id="f-esc" rows="3" placeholder="- Chiller #1 on backup\n- BMS delay: notify PM">${d.esc || ''}</textarea></div>
+      </div>
+      <div class="field"><label class="lbl">Additional Notes</label><textarea class="ta" id="f-notes" rows="3" placeholder="- PPM compliance: 96%">${d.notes || ''}</textarea></div>
+      ${state.error ? `<div class="err-msg">${state.error}</div>` : ''}
+      <div style="margin-top:18px">
+        <button class="btn-primary" id="gen-btn" style="background:${acc.main};color:#0a0a0a" onclick="generate()" ${state.loading ? 'disabled' : ''}>
+          ${state.loading ? '<span class="spin"></span>Generating...' : TAB_CFG.technical.btn}
+        </button>
+      </div>
+    </div>`;
+}
+
+function renderNotebookSelect(defaultId) {
+  let opts = '';
+  state.notebooks.forEach(nb => {
+    opts += `<option value="${nb.id}" ${nb.id === defaultId ? 'selected' : ''}>${nb.name}</option>`;
+  });
+  return `<select class="inp" id="f-notebook" style="cursor:pointer">${opts}</select>`;
+}
+
+function attachGenerateEvents() {}
+
+function setTab(id) {
+  state.tab = id;
+  state.error = '';
+  renderContent();
+}
+
+async function generate() {
+  const tab = state.tab;
+  const title = (document.getElementById('f-title') || {}).value || '';
+  const attendees = (document.getElementById('f-attendees') || {}).value || '';
+  const notebookId = (document.getElementById('f-notebook') || {}).value || tab;
+  const isTech = tab === 'technical';
+
+  let data = { tab, title, attendees, notebookId };
+
+  if (isTech) {
+    data.sys = (document.getElementById('f-sys') || {}).value || '';
+    data.def = (document.getElementById('f-def') || {}).value || '';
+    data.saf = (document.getElementById('f-saf') || {}).value || '';
+    data.esc = (document.getElementById('f-esc') || {}).value || '';
+    data.notes = (document.getElementById('f-notes') || {}).value || '';
+    if (!data.sys.trim() && !data.def.trim() && !data.notes.trim()) {
+      state.error = 'Enter at least one field.'; renderContent(); return;
+    }
+  } else {
+    data.bullets = (document.getElementById('f-bullets') || {}).value || '';
+    data.e1 = (document.getElementById('f-e1') || {}).value || '';
+    data.e2 = (document.getElementById('f-e2') || {}).value || '';
+    if (!data.bullets.trim()) { state.error = 'Enter your bullet points first.'; renderContent(); return; }
+  }
+
+  state.error = '';
+  state.loading = true;
+  state.result = null;
+  state.lastData = data;
+  renderContent();
+
+  try {
+    const anthropicKey = state.anthropicKey;
+    if (!anthropicKey) {
+      const key = prompt('Enter your Anthropic API key (stored locally):');
+      if (!key) { state.loading = false; renderContent(); return; }
+      state.anthropicKey = key;
+      localStorage.setItem(ANTHROPIC_KEY_STORAGE, key);
+    }
+
+    const userContent = isTech
+      ? `Meeting: ${title || 'Technical Meeting'}\n${attendees ? 'Attendees: '+attendees : ''}\nSystems: ${data.sys||'Not provided'}\nDefects: ${data.def||'None'}\nSafety: ${data.saf||'None'}\nEscalations: ${data.esc||'None'}\nNotes: ${data.notes||'None'}`
+      : `Meeting: ${title||'Untitled'}\n${attendees?'Attendees: '+attendees:''}\n${data.e1?'\n'+data.e1:''}${data.e2?' | '+data.e2:''}\nNotes:\n${data.bullets}`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': state.anthropicKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1200,
+        system: `You are an expert FM executive notes writer for Francis Clark, Head of Technical Services.\n${SYS_PROMPTS[tab](FC_CONTEXT)}`,
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+
+    const json = await res.json();
+    if (json.error) throw new Error(json.error.message);
+    const raw = json.content?.find(b => b.type === 'text')?.text || '';
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    state.result = parsed;
+    state.loading = false;
+
+    // Auto-save note
+    const note = {
+      id: Date.now().toString(),
+      title: title || `${TAB_CFG[tab].label} Meeting`,
+      tab,
+      notebookId,
+      createdAt: new Date().toISOString(),
+      data,
+      result: parsed,
+    };
+    state.notes.unshift(note);
+    await saveToDrive();
+    renderContent();
+    setTimeout(() => document.getElementById('output-anchor')?.scrollIntoView({ behavior: 'smooth' }), 100);
+  } catch(e) {
+    state.error = 'Generation failed: ' + (e.message || 'Please try again.');
+    state.loading = false;
+    renderContent();
+    console.error(e);
+  }
+}
+
+// ─── OUTPUT RENDERING ─────────────────────────────────────────────────────────
+function renderOutput(result, tab, acc, data) {
+  const today = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const isTech = tab === 'technical';
+  return `
+    <div id="output-anchor"></div>
+    <div class="divider"></div>
+    <div class="out-hdr">
+      <div>
+        <div class="out-title">${data.title || 'Meeting Notes'}</div>
+        <div class="out-sub">${today}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-outline" onclick="copyNotes()" id="copy-btn">${state.copied ? '✓ Copied' : 'Copy All'}</button>
+      </div>
+    </div>
+    ${isTech ? renderTechnicalOutput(result, acc) : renderStandardOutput(result, acc)}
+  `;
+}
+
+function renderStandardOutput(r, acc) {
+  const a = x => x || [];
+  let html = '';
+  if (r.summary) html += sec(acc, 'Summary', `<p class="sum-txt">${r.summary}</p>`);
+  if (a(r.decisions).length) html += sec(acc, 'Decisions Made', a(r.decisions).map(d => `<div class="dec-row"><span style="color:${acc.main};flex-shrink:0">◆</span><span>${d}</span></div>`).join(''));
+  if (a(r.risks).length) html += sec(acc, 'Risks & Issues', a(r.risks).map(d => `<div class="dec-row"><span style="color:#d97070;flex-shrink:0">▲</span><span>${d}</span></div>`).join(''));
+  if (a(r.findings).length) html += sec(acc, 'Findings & Non-Conformances', a(r.findings).map(d => `<div class="dec-row"><span style="color:#d47a7a;flex-shrink:0">▲</span><span>${d}</span></div>`).join(''));
+  if (a(r.actions).length) html += sec(acc, 'Action Items', a(r.actions).map(x => `<div class="a-row"><span class="o-tag" style="background:${acc.dk};border:1px solid ${acc.bd};color:${acc.tag}">${x.owner}</span><span class="a-task">${x.task}</span></div>`).join(''));
+  if (a(r.next_steps).length) html += sec(acc, 'Next Steps & Deadlines', a(r.next_steps).map(n => `<div class="s-row"><span class="s-txt"><span style="color:${acc.main}">→</span>${n.item}</span>${n.deadline?`<span class="dl" style="color:${acc.main}">${n.deadline}</span>`:''}</div>`).join(''));
+  return html;
+}
+
+function renderTechnicalOutput(r, acc) {
+  const a = x => x || [];
+  const sc = v => ({NORMAL:'#6dbb8a',DEGRADED:'#d4a843',FAULT:'#d97070',OFFLINE:'#c87070'}[(v||'').toUpperCase()]||'#6b6560');
+  const pc = p => ({P1:'#d97070',P2:'#d4a843',P3:'#6dbb8a'}[p]||'#6b6560');
+  const uc = u => ({Immediate:'#d97070','24hr':'#d4a843'}[u]||'#6b6560');
+  let html = '';
+  if (r.summary) html += sec(acc, 'Summary', `<p class="sum-txt">${r.summary}</p>`);
+  if (a(r.systems_health).length) html += sec(acc, 'Systems Health', a(r.systems_health).map(x => `<div class="a-row" style="margin-bottom:10px"><span class="pill" style="border-color:${sc(x.status)}40;background:${sc(x.status)}12;color:${sc(x.status)}">${x.status}</span><div><div style="font-size:13px;color:var(--text);font-weight:500">${x.system}</div>${x.note?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${x.note}</div>`:''}</div></div>`).join(''));
+  if (a(r.open_defects).length) html += sec(acc, 'Open Defects', a(r.open_defects).map(d => `<div class="a-row"><span class="o-tag" style="background:#1a0e0e;border:1px solid #3a1010;color:#c07070">${d.ref}</span><div style="flex:1"><div style="font-size:14px;color:var(--subtext)">${d.description}</div><div style="display:flex;gap:8px;margin-top:5px"><span class="pill" style="border-color:${pc(d.priority)}40;background:${pc(d.priority)}12;color:${pc(d.priority)}">${d.priority}</span><span class="pill" style="border-color:#6b656040;background:#6b656012;color:#6b6560">${d.status}</span></div></div></div>`).join(''));
+  if (a(r.safety_observations).length) html += sec(acc, 'Safety Observations', a(r.safety_observations).map(o => `<div class="dec-row"><span style="color:${acc.main};flex-shrink:0">◆</span><span>${o}</span></div>`).join(''));
+  if (a(r.escalations).length) html += sec(acc, 'Escalations', a(r.escalations).map(e => `<div class="a-row"><span class="pill" style="border-color:${uc(e.urgency)}40;background:${uc(e.urgency)}12;color:${uc(e.urgency)}">${e.urgency}</span><div><div style="font-size:14px;color:var(--subtext)">${e.item}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Owner: ${e.owner}</div></div></div>`).join(''));
+  if (a(r.decisions).length) html += sec(acc, 'Decisions', a(r.decisions).map(d => `<div class="dec-row"><span style="color:${acc.main};flex-shrink:0">◆</span><span>${d}</span></div>`).join(''));
+  if (a(r.actions).length) html += sec(acc, 'Action Items', a(r.actions).map(x => `<div class="a-row"><span class="o-tag" style="background:${acc.dk};border:1px solid ${acc.bd};color:${acc.tag}">${x.owner}</span><span class="a-task">${x.task}</span></div>`).join(''));
+  if (a(r.next_steps).length) html += sec(acc, 'Next Steps & Deadlines', a(r.next_steps).map(n => `<div class="s-row"><span class="s-txt"><span style="color:${acc.main}">→</span>${n.item}</span>${n.deadline?`<span class="dl" style="color:${acc.main}">${n.deadline}</span>`:''}</div>`).join(''));
+  return html;
+}
+
+function sec(acc, label, inner) {
+  return `<div class="sec" style="border:1px solid ${acc.bd};border-top:2px solid ${acc.main};background:${acc.dk}">
+    <div class="sec-lbl" style="color:${acc.main}">${label}</div>${inner}</div>`;
+}
+
+// ─── HISTORY VIEW ─────────────────────────────────────────────────────────────
+function renderHistoryView() {
+  let notes = state.notes;
+  if (state.activeNotebook) notes = notes.filter(n => n.notebookId === state.activeNotebook);
+  if (state.searchQuery) {
+    const q = state.searchQuery.toLowerCase();
+    notes = notes.filter(n =>
+      (n.title||'').toLowerCase().includes(q) ||
+      (n.result?.summary||'').toLowerCase().includes(q) ||
+      (n.data?.bullets||'').toLowerCase().includes(q)
+    );
+  }
+
+  if (!notes.length) return `<div class="empty"><div class="empty-icon">◈</div><div class="empty-title">${state.searchQuery ? 'No results' : 'No notes yet'}</div><div class="empty-sub">${state.searchQuery ? 'Try a different search term.' : 'Generate your first meeting notes using the Generate tab.'}</div></div>`;
+
+  return `<div class="notes-list">${notes.map(n => renderNoteCard(n)).join('')}</div>`;
+}
+
+function renderNoteCard(note) {
+  const nb = state.notebooks.find(n => n.id === note.notebookId) || { name: note.tab, color: getNbColor(note.tab) };
+  const acc = ACCENT[nb.color] || ACCENT['c-general'];
+  const preview = note.result?.summary || '';
+  return `<div class="note-card" onclick="setView('note-detail','${note.id}')">
+    <div class="note-card-hdr">
+      <div class="note-card-title">${note.title || 'Meeting Notes'}</div>
+      <button class="btn-ghost" onclick="event.stopPropagation();deleteNote('${note.id}')" style="color:#444;font-size:16px">×</button>
+    </div>
+    <div class="note-card-meta">
+      <span class="tag" style="background:${acc.dk};border:1px solid ${acc.bd};color:${acc.tag}">${nb.name}</span>
+      <span class="date-txt">${formatDate(note.createdAt)}</span>
+    </div>
+    ${preview ? `<div class="note-card-preview">${preview}</div>` : ''}
+  </div>`;
+}
+
+function renderNoteDetail(note) {
+  if (!note) return '<div class="empty"><div class="empty-title">Note not found.</div></div>';
+  const nb = state.notebooks.find(n => n.id === note.notebookId) || { color: getNbColor(note.tab) };
+  const acc = ACCENT[nb.color] || ACCENT['c-general'];
+  const isTech = note.tab === 'technical';
+  return `<div class="note-detail">
+    <div class="note-detail-hdr">
+      <button class="back-btn" onclick="setView('history')">←</button>
+      <div style="flex:1">
+        <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:600">${note.title || 'Meeting Notes'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">${formatDate(note.createdAt)}</div>
+      </div>
+      <button class="btn-outline" onclick="copyNoteById('${note.id}')" id="copy-btn-${note.id}">Copy All</button>
+    </div>
+    ${isTech ? renderTechnicalOutput(note.result, acc) : renderStandardOutput(note.result, acc)}
+  </div>`;
+}
+
+// ─── NOTEBOOKS MODAL ──────────────────────────────────────────────────────────
+let selectedNbColor = 'c-custom1';
+
+function openNbModal() {
+  const picker = document.getElementById('nb-color-picker');
+  picker.innerHTML = COLOR_OPTIONS.map(c => `
+    <div onclick="selectNbColor('${c.id}')" id="color-opt-${c.id}" style="width:28px;height:28px;border-radius:50%;background:${c.hex};cursor:pointer;border:2px solid ${selectedNbColor === c.id ? '#fff' : 'transparent'};transition:border-color 0.15s"></div>
+  `).join('');
+  document.getElementById('nb-modal').style.display = 'flex';
+  document.getElementById('nb-name-input').focus();
+}
+
+function selectNbColor(id) {
+  selectedNbColor = id;
+  COLOR_OPTIONS.forEach(c => {
+    const el = document.getElementById(`color-opt-${c.id}`);
+    if (el) el.style.borderColor = c.id === id ? '#fff' : 'transparent';
+  });
+}
+
+function closeNbModal() {
+  document.getElementById('nb-modal').style.display = 'none';
+}
+
+async function addNotebook() {
+  const name = document.getElementById('nb-name-input').value.trim();
+  if (!name) return;
+  const id = 'custom-' + Date.now();
+  state.notebooks.push({ id, name, color: selectedNbColor, preset: false });
+  closeNbModal();
+  document.getElementById('nb-name-input').value = '';
+  await saveToDrive();
+  renderAll();
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function getNbColor(tabId) {
+  return `c-${tabId}` in ACCENT ? `c-${tabId}` : 'c-general';
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+async function deleteNote(id) {
+  if (!confirm('Delete this note?')) return;
+  state.notes = state.notes.filter(n => n.id !== id);
+  await saveToDrive();
+  renderAll();
+}
+
+function copyNotes() {
+  if (!state.result) return;
+  const text = buildCopyText(state.result, state.tab, state.lastData);
+  navigator.clipboard.writeText(text);
+  state.copied = true;
+  document.getElementById('copy-btn').textContent = '✓ Copied';
+  setTimeout(() => { state.copied = false; const b = document.getElementById('copy-btn'); if(b) b.textContent = 'Copy All'; }, 2000);
+}
+
+function copyNoteById(id) {
+  const note = state.notes.find(n => n.id === id);
+  if (!note) return;
+  navigator.clipboard.writeText(buildCopyText(note.result, note.tab, note.data));
+  const btn = document.getElementById(`copy-btn-${id}`);
+  if (btn) { btn.textContent = '✓ Copied'; setTimeout(() => { btn.textContent = 'Copy All'; }, 2000); }
+}
+
+function buildCopyText(r, tab, data) {
+  const today = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const hdr = `FC MEETING NOTES - ${tab.toUpperCase()}\n${data.title || 'Meeting'} | ${today}\n${data.attendees ? 'Attendees: '+data.attendees : ''}`;
+  const a = x => x || [];
+  const lines = [hdr, '', 'SUMMARY', r.summary || ''];
+  if (tab === 'technical') {
+    if (a(r.systems_health).length) { lines.push('', 'SYSTEMS'); a(r.systems_health).forEach(x => lines.push(`- ${x.system}: ${x.status}${x.note?' - '+x.note:''}`)); }
+    if (a(r.open_defects).length) { lines.push('', 'DEFECTS'); a(r.open_defects).forEach(x => lines.push(`- [${x.ref}] ${x.description} | ${x.priority} | ${x.status}`)); }
+    if (a(r.safety_observations).length) { lines.push('', 'SAFETY'); a(r.safety_observations).forEach(x => lines.push(`- ${x}`)); }
+    if (a(r.escalations).length) { lines.push('', 'ESCALATIONS'); a(r.escalations).forEach(x => lines.push(`- ${x.item} | ${x.owner} | ${x.urgency}`)); }
+  } else {
+    if (a(r.decisions).length) { lines.push('', 'DECISIONS'); a(r.decisions).forEach(x => lines.push(`- ${x}`)); }
+    if (a(r.risks).length) { lines.push('', 'RISKS'); a(r.risks).forEach(x => lines.push(`- ${x}`)); }
+    if (a(r.findings).length) { lines.push('', 'FINDINGS'); a(r.findings).forEach(x => lines.push(`- ${x}`)); }
+  }
+  if (a(r.actions).length) { lines.push('', 'ACTIONS'); a(r.actions).forEach(x => lines.push(`- ${x.owner}: ${x.task}`)); }
+  if (a(r.next_steps).length) { lines.push('', 'NEXT STEPS'); a(r.next_steps).forEach(x => lines.push(`- ${x.item}${x.deadline?' | '+x.deadline:''}`)); }
+  return lines.join('\n');
+}
+</script>
+</body>
+</html>
