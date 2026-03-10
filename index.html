@@ -393,9 +393,14 @@ function initGoogleAuth() {
     callback: async (resp) => {
       if (resp.error) { console.error(resp); return; }
       state.accessToken = resp.access_token;
+      // Store token expiry and hint for auto-refresh
+      state.tokenExpiry = Date.now() + (3500 * 1000);
+      const hint = localStorage.getItem('fc_user_hint');
       setSyncStatus('syncing', 'Syncing...');
       await loadFromDrive();
       showApp();
+      // Schedule silent refresh before expiry
+      scheduleTokenRefresh();
     },
   });
 }
@@ -419,13 +424,69 @@ function showApp() {
   renderAll();
 }
 
+function scheduleTokenRefresh() {
+  // Refresh token 5 minutes before expiry
+  const delay = Math.max((state.tokenExpiry - Date.now()) - 300000, 60000);
+  setTimeout(() => silentRefresh(), delay);
+}
+
+function silentRefresh() {
+  if (!tokenClient) return;
+  const hint = localStorage.getItem('fc_user_hint');
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    hint: hint || undefined,
+    prompt: '',
+    callback: async (resp) => {
+      if (resp.error) { 
+        // Silent refresh failed, but don't log out - try again later
+        setTimeout(() => silentRefresh(), 300000);
+        return; 
+      }
+      state.accessToken = resp.access_token;
+      state.tokenExpiry = Date.now() + (3500 * 1000);
+      setSyncStatus('ok', 'Synced');
+      scheduleTokenRefresh();
+    },
+  });
+  tokenClient.requestAccessToken({ prompt: '' });
+}
+
 window.addEventListener('load', () => {
-  // Try silent sign-in via stored hint
-  if (window.google) {
-    initGoogleAuth();
-    // Show auth screen; user must click
+  // Wait for GSI to load then attempt silent sign-in
+  function tryAutoSignIn() {
+    if (!window.google) { setTimeout(tryAutoSignIn, 200); return; }
+    const hint = localStorage.getItem('fc_user_hint');
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      hint: hint || undefined,
+      prompt: '',
+      callback: async (resp) => {
+        if (resp.error || !resp.access_token) {
+          // Silent failed - show login screen
+          initGoogleAuth();
+          document.getElementById('auth-screen').style.display = 'flex';
+          return;
+        }
+        state.accessToken = resp.access_token;
+        state.tokenExpiry = Date.now() + (3500 * 1000);
+        setSyncStatus('syncing', 'Syncing...');
+        await loadFromDrive();
+        showApp();
+        scheduleTokenRefresh();
+      },
+    });
+    // Attempt silent token request (no UI shown if it works)
+    if (hint) {
+      tokenClient.requestAccessToken({ prompt: '' });
+    } else {
+      initGoogleAuth();
+      document.getElementById('auth-screen').style.display = 'flex';
+    }
   }
-  document.getElementById('auth-screen').style.display = 'flex';
+  tryAutoSignIn();
 });
 
 // ─── GOOGLE DRIVE ─────────────────────────────────────────────────────────────
@@ -453,6 +514,14 @@ async function loadFromDrive() {
   try {
     setSyncStatus('syncing', 'Loading...');
     const fileId = await findDriveFile();
+    // Store user hint for silent re-auth
+    try {
+      const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { 'Authorization': `Bearer ${state.accessToken}` }
+      });
+      const profile = await profileRes.json();
+      if (profile.email) localStorage.setItem('fc_user_hint', profile.email);
+    } catch(e) {}
     if (fileId) {
       state.driveFileId = fileId;
       const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
